@@ -313,8 +313,14 @@ var BasisAPI = (function() {
       pd.stats = recalcStats(pd.history);
     });
 
-    var allDates = output.products.IF ? output.products.IF.history.dates : [];
-    output.meta.data_end = allDates.length > 0 ? allDates[allDates.length - 1] : output.meta.data_end;
+    // data_end 与 current.date 保持一致（而非 history 末尾）
+    var currentDate = null;
+    Object.keys(PRODUCTS).forEach(function(p) {
+      if (output.products[p] && output.products[p].current && output.products[p].current.date) {
+        if (!currentDate || output.products[p].current.date > currentDate) currentDate = output.products[p].current.date;
+      }
+    });
+    if (currentDate) output.meta.data_end = currentDate;
     output.meta.trading_days = allDates.length;
 
     return output;

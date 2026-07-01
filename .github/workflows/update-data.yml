@@ -42,5 +42,6 @@ jobs:
             echo "No data changes, skip commit."
           else
             git commit -m "auto: update data.js $(date -u +%Y-%m-%d)"
+            git pull --rebase
             git push
           fi

@@ -319,14 +319,16 @@ var BasisAPI = (function() {
       pd.stats = recalcStats(pd.history);
     });
 
-    // data_end 与 current.date 保持一致（而非 history 末尾）
-    var currentDate = null;
+    // data_end 取 history 中实际最后日期，防止增量拉取时重复追加
     Object.keys(PRODUCTS).forEach(function(p) {
-      if (output.products[p] && output.products[p].current && output.products[p].current.date) {
-        if (!currentDate || output.products[p].current.date > currentDate) currentDate = output.products[p].current.date;
+      var pd2 = output.products[p];
+      if (pd2 && pd2.history && pd2.history.dates && pd2.history.dates.length > 0) {
+        var lastDate = pd2.history.dates[pd2.history.dates.length - 1];
+        if (!output.meta.data_end || lastDate > output.meta.data_end) {
+          output.meta.data_end = lastDate;
+        }
       }
     });
-    if (currentDate) output.meta.data_end = currentDate;
     if (output.products.IF && output.products.IF.history && output.products.IF.history.dates) {
       output.meta.trading_days = output.products.IF.history.dates.length;
     }

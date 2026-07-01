@@ -271,6 +271,7 @@ var BasisAPI = (function() {
       });
 
       // 更新 current 为最后一条完整数据
+      var oldCurrent = pd.current;
       for (var i = pd.history.dates.length - 1; i >= 0; i--) {
         if (pd.history['当月_rate'][i] != null && pd.history['下月_rate'][i] != null
             && pd.history['当季_rate'][i] != null && pd.history['隔季_rate'][i] != null
@@ -288,8 +289,13 @@ var BasisAPI = (function() {
                 break;
               }
             }
-            if (!code && pd.current && pd.current.contracts && pd.current.contracts[l]) {
-              code = pd.current.contracts[l].code;
+            // 从旧 current 中 fallback 获取合约代码
+            if (!code && oldCurrent && oldCurrent.contracts && oldCurrent.contracts[l]) {
+              code = oldCurrent.contracts[l].code;
+            }
+            // 根据合约代码重新计算剩余天数
+            if (days == null && code) {
+              days = Math.round((contractExpiryDate(code) - parseDate(date)) / 86400000);
             }
             rate = pd.history[l + '_rate'][i];
             annual = pd.history[l + '_annual'][i];

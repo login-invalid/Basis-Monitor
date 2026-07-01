@@ -47,9 +47,10 @@ def get_next_two_quarter_months(after_year, after_month):
 
 
 def get_active_contracts(date, product):
-    year, month = date.year, date.month
+    d = date.date() if hasattr(date, 'date') else date
+    year, month = d.year, d.month
     tf = get_third_friday(year, month)
-    if date > tf:
+    if d > tf:
         cm_year, cm_month = (year + 1, 1) if month == 12 else (year, month + 1)
     else:
         cm_year, cm_month = year, month
@@ -205,8 +206,8 @@ def build_output(records_map, spot_data, trading_dates, validation):
 
 def main():
     logger.info("=== 开始全量数据拉取 ===")
-    today = datetime.date.today()
-    start_date = pd.Timestamp(today.replace(year=today.year - LOOKBACK_YEARS))
+    today = pd.Timestamp(datetime.date.today())
+    start_date = pd.Timestamp(today.date().replace(year=today.year - LOOKBACK_YEARS))
 
     # 获取现货
     spot_data = {}

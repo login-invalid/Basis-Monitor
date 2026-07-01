@@ -321,7 +321,9 @@ var BasisAPI = (function() {
       }
     });
     if (currentDate) output.meta.data_end = currentDate;
-    output.meta.trading_days = allDates.length;
+    if (output.products.IF && output.products.IF.history && output.products.IF.history.dates) {
+      output.meta.trading_days = output.products.IF.history.dates.length;
+    }
 
     return output;
   }

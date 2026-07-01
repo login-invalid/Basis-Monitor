@@ -1,6 +1,6 @@
 /**
  * 纯前端数据获取模块
- * 通过 CORS 代理从东方财富 / 新浪财经获取现货指数与期货合约日K线数据，
+ * 通过 CORS 代理从东方财富获取现货指数与期货合约日K线数据，
  * 在浏览器端完成基差计算，无需 Python 后端。
  */
 var BasisAPI = (function() {
@@ -107,7 +107,6 @@ var BasisAPI = (function() {
       var map = {};
       json.data.klines.forEach(function(line) {
         var parts = line.split(',');
-        // parts: date,open,close,high,low,volume,amount,amplitude,change_pct,change_amount,turnover
         map[parts[0]] = parseFloat(parts[2]); // close
       });
       return map;
@@ -116,7 +115,6 @@ var BasisAPI = (function() {
 
   // ---- 获取期货合约日K线 (东方财富) ----
   function fetchFuturesKline(contractCode, startDate) {
-    // 东方财富期货代码格式: 8.IF2507
     var emCode = '8.' + contractCode;
     var url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get'
       + '?secid=' + emCode
@@ -143,9 +141,11 @@ var BasisAPI = (function() {
     if (existingData && existingData.meta && existingData.meta.data_end) {
       oldEnd = parseDate(existingData.meta.data_end);
     }
-    // 如果数据已经是今天或周末，不需要更新
+    // 如果数据已经是今天或周末，不需要更新，但仍刷新时间戳
     if (oldEnd && (dateStr(oldEnd) >= dateStr(today) || today.getDay() === 0 || today.getDay() === 6)) {
-      return Promise.resolve(existingData);
+      var result = JSON.parse(JSON.stringify(existingData));
+      result.meta.last_updated = new Date().toLocaleString('zh-CN', {hour12: false});
+      return Promise.resolve(result);
     }
 
     var startDate = oldEnd ? dateStr(oldEnd) : dateStr(new Date(today.getFullYear() - 3, today.getMonth(), today.getDate()));
@@ -166,7 +166,6 @@ var BasisAPI = (function() {
       var keys = Object.keys(PRODUCTS);
       keys.forEach(function(p, i) { spotData[p] = spotResults[i]; });
 
-      // 获取交易日列表
       var ifDates = Object.keys(spotData['IF'] || {}).sort();
       if (ifDates.length === 0) throw new Error('无法获取现货数据，请检查网络连接');
 
@@ -191,8 +190,6 @@ var BasisAPI = (function() {
       return Promise.all(fetchPromises).then(function(futuresResults) {
         var futuresData = {};
         futuresResults.forEach(function(r) { futuresData[r.code] = r.data; });
-
-        // 4. 合并到已有数据
         return mergeAndCompute(existingData, spotData, futuresData, ifDates);
       });
     });
@@ -200,17 +197,15 @@ var BasisAPI = (function() {
 
   // ---- 合并增量数据到已有 dataset ----
   function mergeAndCompute(existingData, spotData, futuresData, newDates) {
-    // 找出新数据中比已有数据更晚的日期
     var existingEndDate = existingData && existingData.meta && existingData.meta.data_end
       ? existingData.meta.data_end : '2000-01-01';
 
-    // 按产品构建新记录
     var newRecords = {};
     Object.keys(PRODUCTS).forEach(function(product) {
       newRecords[product] = [];
       var spot = spotData[product] || {};
       newDates.forEach(function(dStr) {
-        if (dStr <= existingEndDate) return; // 只处理新增日期
+        if (dStr <= existingEndDate) return;
         var spotPrice = spot[dStr];
         if (!spotPrice) return;
         var d = parseDate(dStr);
@@ -244,18 +239,17 @@ var BasisAPI = (function() {
       });
     });
 
-    // 如果没有新数据，直接返回原有数据
     var hasNew = Object.values(newRecords).some(function(recs) { return recs.length > 0; });
+    var output = JSON.parse(JSON.stringify(existingData));
+    output.meta.last_updated = new Date().toLocaleString('zh-CN', {hour12: false});
+
     if (!hasNew) {
-      return existingData;
+      return output;
     }
 
-    // 合并到已有数据的 history 中
-    var output = JSON.parse(JSON.stringify(existingData));
     Object.keys(PRODUCTS).forEach(function(p) {
       var pd = output.products[p];
       if (!pd) return;
-      // 确保 history 中有 _price 和 _basis 字段（旧版 data.js 可能没有）
       LABELS.forEach(function(l) {
         if (!pd.history[l + '_price']) {
           pd.history[l + '_price'] = new Array(pd.history.dates.length).fill(null);
@@ -276,7 +270,7 @@ var BasisAPI = (function() {
         });
       });
 
-      // 更新 current 为最后一条有当月基差率的记录
+      // 更新 current 为最后一条完整数据
       for (var i = pd.history.dates.length - 1; i >= 0; i--) {
         if (pd.history['当月_rate'][i] != null && pd.history['下月_rate'][i] != null
             && pd.history['当季_rate'][i] != null && pd.history['隔季_rate'][i] != null
@@ -286,7 +280,6 @@ var BasisAPI = (function() {
           pd.current = { date: date, spot_price: spotPrice, contracts: {} };
           LABELS.forEach(function(l) {
             var code = null, days = null, price = null, basis = null, rate = null, annual = null;
-            // 优先从新记录中获取 code 和 days
             for (var j = recs.length - 1; j >= 0; j--) {
               if (recs[j].date === date) {
                 code = recs[j][l + '_code'];
@@ -295,7 +288,6 @@ var BasisAPI = (function() {
                 break;
               }
             }
-            // 如果不是新记录中的日期，从旧 current 中的 code 推算
             if (!code && pd.current && pd.current.contracts && pd.current.contracts[l]) {
               code = pd.current.contracts[l].code;
             }
@@ -318,15 +310,12 @@ var BasisAPI = (function() {
         }
       }
 
-      // 重新计算 stats
       pd.stats = recalcStats(pd.history);
     });
 
-    // 更新 meta
     var allDates = output.products.IF ? output.products.IF.history.dates : [];
     output.meta.data_end = allDates.length > 0 ? allDates[allDates.length - 1] : output.meta.data_end;
     output.meta.trading_days = allDates.length;
-    output.meta.last_updated = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
     return output;
   }
@@ -355,7 +344,7 @@ var BasisAPI = (function() {
           latest: parseFloat(latest.toFixed(4)),
           pct_positive: parseFloat((positiveCount / valid.length * 100).toFixed(1)),
           ann_mean: validAnn.length > 0 ? parseFloat((annSum / validAnn.length).toFixed(4)) : null,
-          ann_std: null,  // 简化，前端不做年化标准差
+          ann_std: null,
           ann_min: validAnn.length > 0 ? parseFloat(annMin.toFixed(4)) : null,
           ann_max: validAnn.length > 0 ? parseFloat(annMax.toFixed(4)) : null,
           ann_latest: validAnn.length > 0 ? parseFloat(validAnn[validAnn.length - 1].toFixed(4)) : null
@@ -367,10 +356,9 @@ var BasisAPI = (function() {
     return stats;
   }
 
-  // ---- 增量更新入口（供 charts.js 调用） ----
+  // ---- 增量更新入口 ----
   function incrementalUpdate(existingData) {
     return fetchIncremental(existingData).then(function(newData) {
-      // 将更新后的数据写回 window.basisData
       window.basisData = newData;
       return newData;
     });

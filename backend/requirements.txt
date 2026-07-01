@@ -1,0 +1,7 @@
+# 股指期货升贴水追踪 - 后端依赖
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+apscheduler==3.10.4
+akshare>=1.16.72
+pandas==2.2.3
+numpy==1.26.4

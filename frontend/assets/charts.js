@@ -52,7 +52,7 @@
       LABELS.forEach(function(l){var r=pd.current.contracts[l];if(!r||r.basis==null)return;
         totalContracts++;
         if(r.basis>0){discountContracts++;discountDetails.push(p+l);}
-        else{premiumContracts++;premiumDetails.push(p+l);}
+        else if(r.basis<0){premiumContracts++;premiumDetails.push(p+l);}
       });
     });
     if(discountContracts===totalContracts&&totalContracts>0){
@@ -109,7 +109,7 @@
 
   function renderCards(){
     if(!D)return;var h='';
-    PRODUCTS.forEach(function(p){var pd=D.products[p];if(!pd)return;var c=pd.current,fm=c.contracts['当月'];var ip=fm.basis>0,cl=ip?'pos':'neg',st=ip?'贴水':'升水';
+    PRODUCTS.forEach(function(p){var pd=D.products[p];if(!pd)return;var c=pd.current,fm=c.contracts['当月'];var bs=fm.basis,cl=bs==null?'neutral':(bs>0?'pos':(bs<0?'neg':'neutral')),st=bs==null?'无数据':(bs>0?'贴水':(bs<0?'升水':'平水'));
       h+='<div class="metric-card"><div class="mc-header"><span class="mc-name">'+p+' '+pd.name+'</span><span class="mc-spot">'+fmt(c.spot_price,1)+'</span></div>'
       +'<div class="mc-value '+cl+'">'+fmtP(fm.basis_rate)+'</div><div class="mc-label">当月基差率 · '+fm.code+'</div>'
       +'<span class="mc-status '+cl+'">'+st+'</span><div class="mc-annual">年化: '+fmtP(fm.annualized_rate)+' · 剩余'+(fm.days_to_expiry||'—')+'天</div></div>';});
@@ -120,7 +120,7 @@
     if(!D)return;var h='';
     PRODUCTS.forEach(function(p){var pd=D.products[p];if(!pd)return;var c=pd.current;
       h+='<tr class="product-row"><td colspan="9">'+p+' '+pd.name+' — 现货: '+fmt(c.spot_price,3)+' · 日期: '+c.date+'</td></tr>';
-      LABELS.forEach(function(l){var r=c.contracts[l],ip=r.basis>0,cl=ip?'pos':'neg',st=ip?'贴水':'升水';
+      LABELS.forEach(function(l){var r=c.contracts[l],bs=r.basis,cl=bs==null?'neutral':(bs>0?'pos':(bs<0?'neg':'neutral')),st=bs==null?'无数据':(bs>0?'贴水':(bs<0?'升水':'平水'));
         h+='<tr><td></td><td>'+l+'</td><td>'+r.code+'</td><td>'+fmt(r.price,1)+'</td><td class="'+cl+'-text">'+fmt(r.basis,2)+'</td><td class="'+cl+'-text">'+fmt(r.basis_rate,2)+'</td><td class="'+cl+'-text">'+fmt(r.annualized_rate,2)+'</td><td>'+(r.days_to_expiry||'—')+'</td><td><span class="status-tag '+cl+'">'+st+'</span></td></tr>';});});
     var el=document.getElementById('snapshot-tbody');if(el)el.innerHTML=h;
   }
@@ -135,13 +135,14 @@
   function lineOpt(dates,sd,yn,ml){
     var s=sd.map(function(x){return{name:x.name,type:'line',data:x.data,showSymbol:false,lineStyle:{width:1.5},itemStyle:{color:x.color},connectNulls:false,emphasis:{focus:'series'}};});
     if(ml&&s.length>0)s[0].markLine={silent:true,symbol:'none',lineStyle:{color:muted,type:'dashed',width:1},data:[{yAxis:0,label:{formatter:'升贴水分界',color:muted,fontFamily:FONT,fontSize:10}}]};
-    return{textStyle:{fontFamily:FONT,color:ink},tooltip:{trigger:'axis',appendToBody:true,formatter:function(p){var s=p[0].axisValue+'<br/>';p.forEach(function(x){if(x.value==null)return;var c=x.value>0?pos:neg;s+=x.marker+x.seriesName+': <b style="color:'+c+'">'+fmtP(x.value)+'</b><br/>';});return s;}},legend:{top:0,textStyle:{color:muted,fontFamily:FONT,fontSize:11}},grid:{top:35,bottom:55,left:55,right:20},xAxis:{type:'category',data:dates,axisLabel:{color:muted,fontFamily:FONT,fontSize:10},axisLine:{lineStyle:{color:rule}}},yAxis:{type:'value',name:yn,nameTextStyle:{color:muted,fontFamily:FONT,fontSize:11},axisLabel:{color:muted,fontFamily:FONT,formatter:'{value}%'},splitLine:{lineStyle:{color:rule,type:'dashed'}},axisLine:{show:false}},dataZoom:[{type:'inside',start:0,end:100},{type:'slider',start:0,end:100,height:18,bottom:8,textStyle:{color:muted,fontFamily:FONT}}],series:s,animation:false};
+    return{textStyle:{fontFamily:FONT,color:ink},tooltip:{trigger:'axis',appendToBody:true,formatter:function(p){var s=p[0].axisValue+'<br/>';p.forEach(function(x){if(x.value==null)return;var c=x.value>0?pos:(x.value<0?neg:muted);s+=x.marker+x.seriesName+': <b style="color:'+c+'">'+fmtP(x.value)+'</b><br/>';});return s;}},legend:{top:0,textStyle:{color:muted,fontFamily:FONT,fontSize:11}},grid:{top:35,bottom:55,left:55,right:20},xAxis:{type:'category',data:dates,axisLabel:{color:muted,fontFamily:FONT,fontSize:10},axisLine:{lineStyle:{color:rule}}},yAxis:{type:'value',name:yn,nameTextStyle:{color:muted,fontFamily:FONT,fontSize:11},axisLabel:{color:muted,fontFamily:FONT,formatter:'{value}%'},splitLine:{lineStyle:{color:rule,type:'dashed'}},axisLine:{show:false}},dataZoom:[{type:'inside',start:0,end:100},{type:'slider',start:0,end:100,height:18,bottom:8,textStyle:{color:muted,fontFamily:FONT}}],series:s,animation:false};
   }
 
   function barOpt(field,yn){
     var pl=PRODUCTS.map(function(p){return D.products[p]?(p+'\n'+D.products[p].name):p;});
     var s=LABELS.map(function(l,i){return{name:l,type:'bar',data:PRODUCTS.map(function(p){return D.products[p]?D.products[p].current.contracts[l][field]:null;}),itemStyle:{color:CC[i]},barGap:'10%',barCategoryGap:'40%'};});
-    return{textStyle:{fontFamily:FONT,color:ink},tooltip:{trigger:'axis',appendToBody:true,axisPointer:{type:'shadow'},formatter:function(p){var s=p[0].name.replace('\n',' ')+'<br/>';p.forEach(function(x){var c=x.value>0?pos:neg;s+=x.marker+x.seriesName+': <b style="color:'+c+'">'+fmtP(x.value)+'</b><br/>';});return s;}},legend:{data:LABELS,top:0,textStyle:{color:muted,fontFamily:FONT}},grid:{top:40,bottom:30,left:55,right:20},xAxis:{type:'category',data:pl,axisLabel:{color:muted,fontFamily:FONT,fontSize:11},axisLine:{lineStyle:{color:rule}}},yAxis:{type:'value',name:yn,nameTextStyle:{color:muted,fontFamily:FONT,fontSize:11},axisLabel:{color:muted,fontFamily:FONT,formatter:'{value}%'},splitLine:{lineStyle:{color:rule,type:'dashed'}},axisLine:{show:false}},series:s,animation:false};
+    if(s.length>0)s[0].markLine={silent:true,symbol:'none',lineStyle:{color:muted,type:'dashed',width:1},data:[{yAxis:0,label:{formatter:'升贴水分界',color:muted,fontFamily:FONT,fontSize:10}}]};
+    return{textStyle:{fontFamily:FONT,color:ink},tooltip:{trigger:'axis',appendToBody:true,axisPointer:{type:'shadow'},formatter:function(p){var s=p[0].name.replace('\n',' ')+'<br/>';p.forEach(function(x){if(x.value==null)return;var c=x.value>0?pos:(x.value<0?neg:muted);s+=x.marker+x.seriesName+': <b style="color:'+c+'">'+fmtP(x.value)+'</b><br/>';});return s;}},legend:{data:LABELS,top:0,textStyle:{color:muted,fontFamily:FONT}},grid:{top:40,bottom:30,left:55,right:20},xAxis:{type:'category',data:pl,axisLabel:{color:muted,fontFamily:FONT,fontSize:11},axisLine:{lineStyle:{color:rule}}},yAxis:{type:'value',name:yn,nameTextStyle:{color:muted,fontFamily:FONT,fontSize:11},axisLabel:{color:muted,fontFamily:FONT,formatter:'{value}%'},splitLine:{lineStyle:{color:rule,type:'dashed'}},axisLine:{show:false}},series:s,animation:false};
   }
 
   function renderAll(){
